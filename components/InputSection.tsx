@@ -11,6 +11,7 @@ interface InputSectionProps {
 
 const InputSection: React.FC<InputSectionProps> = ({ participants, setParticipants, onNext }) => {
   const [inputText, setInputText] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Analyze duplicates
@@ -46,7 +47,24 @@ const InputSection: React.FC<InputSectionProps> = ({ participants, setParticipan
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const text = event.target?.result as string;
+      const buffer = event.target?.result as ArrayBuffer;
+      let text = '';
+
+      // Try decoding as UTF-8 first
+      try {
+        const decoder = new TextDecoder('utf-8', { fatal: true });
+        text = decoder.decode(buffer);
+      } catch (e) {
+        // If UTF-8 fails (likely Big5/CP950 from Excel on Traditional Chinese Windows), try Big5
+        try {
+          const decoder = new TextDecoder('big5');
+          text = decoder.decode(buffer);
+        } catch (e2) {
+          alert('無法辨識檔案編碼，請確認檔案為 UTF-8 或 Big5 格式');
+          return;
+        }
+      }
+
       const names = text
         .split(/[\n\r]+/)
         .map(n => n.split(',')[0].trim()) // Assume first column if CSV
@@ -61,30 +79,34 @@ const InputSection: React.FC<InputSectionProps> = ({ participants, setParticipan
       // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const handleClear = () => {
-    if (confirm('確定要清空所有名單嗎？')) {
+    if (confirmClear) {
       setParticipants([]);
+      setConfirmClear(false);
+    } else {
+      setConfirmClear(true);
+      setTimeout(() => setConfirmClear(false), 3000);
     }
   };
 
   const handleLoadDemoData = () => {
     const demoNames = [
-      "王小明", "李大華", "張美麗", "陳志豪", "林怡君", 
+      "王小明", "李大華", "張美麗", "陳志豪", "林怡君",
       "陳建國", "吳雅婷", "楊宗緯", "蔡依林", "周杰倫",
       "張惠妹", "林俊傑", "田馥甄", "蕭敬騰", "鄧紫棋",
       "五月天", "孫燕姿", "梁靜茹", "陳奕迅", "王力宏",
       "劉德華", "張學友", "郭富城", "黎明", "金城武"
     ];
-    
+
     // Add randomness to demo data creation so IDs are unique
     const newParticipants = demoNames.map(name => ({
       id: generateId(),
       name
     }));
-    
+
     setParticipants([...participants, ...newParticipants]);
   };
 
@@ -113,18 +135,18 @@ const InputSection: React.FC<InputSectionProps> = ({ participants, setParticipan
         {/* Manual Input */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-4">
-             <div className="flex items-center gap-2 text-indigo-600">
-                <FileText className="w-5 h-5" />
-                <h3 className="font-semibold">文字輸入</h3>
-             </div>
-             <button 
-               onClick={handleLoadDemoData}
-               className="text-xs flex items-center gap-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded transition-colors"
-               title="自動填入測試用名單"
-             >
-               <Wand2 className="w-3 h-3" />
-               載入範例
-             </button>
+            <div className="flex items-center gap-2 text-indigo-600">
+              <FileText className="w-5 h-5" />
+              <h3 className="font-semibold">文字輸入</h3>
+            </div>
+            <button
+              onClick={handleLoadDemoData}
+              className="text-xs flex items-center gap-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded transition-colors"
+              title="自動填入測試用名單"
+            >
+              <Wand2 className="w-3 h-3" />
+              載入範例
+            </button>
           </div>
           <textarea
             className="w-full h-40 p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none text-slate-700 placeholder:text-slate-400"
@@ -148,7 +170,7 @@ const InputSection: React.FC<InputSectionProps> = ({ participants, setParticipan
             <Upload className="w-5 h-5" />
             <h3 className="font-semibold">CSV 上傳</h3>
           </div>
-          <div 
+          <div
             className="flex-1 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center p-6 text-slate-500 hover:bg-slate-50 hover:border-emerald-400 transition-colors cursor-pointer"
             onClick={() => fileInputRef.current?.click()}
           >
@@ -173,29 +195,32 @@ const InputSection: React.FC<InputSectionProps> = ({ participants, setParticipan
             <Users className="w-5 h-5 text-slate-500" />
             <span className="font-semibold text-slate-700">目前名單 ({participants.length} 人)</span>
           </div>
-          
+
           <div className="flex items-center gap-2">
             {hasDuplicates && (
-                <button
-                    onClick={handleRemoveDuplicates}
-                    className="text-orange-600 hover:text-orange-800 text-sm font-medium flex items-center gap-1 px-3 py-1 rounded-md bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors"
-                >
-                    <CopyX className="w-4 h-4" />
-                    移除重複
-                </button>
+              <button
+                onClick={handleRemoveDuplicates}
+                className="text-orange-600 hover:text-orange-800 text-sm font-medium flex items-center gap-1 px-3 py-1 rounded-md bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors"
+              >
+                <CopyX className="w-4 h-4" />
+                移除重複
+              </button>
             )}
             {participants.length > 0 && (
-                <button 
+              <button
                 onClick={handleClear}
-                className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center gap-1 px-3 py-1 rounded-md hover:bg-red-50 transition-colors"
-                >
+                className={`text-sm font-medium flex items-center gap-1 px-3 py-1 rounded-md transition-colors ${confirmClear
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                  }`}
+              >
                 <Trash2 className="w-4 h-4" />
-                清空
-                </button>
+                {confirmClear ? '確認清空?' : '清空'}
+              </button>
             )}
           </div>
         </div>
-        
+
         <div className="p-4 max-h-60 overflow-y-auto bg-slate-50/50">
           {participants.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
@@ -206,18 +231,18 @@ const InputSection: React.FC<InputSectionProps> = ({ participants, setParticipan
               {participants.map((p) => {
                 const isDuplicate = nameCounts[p.name] > 1;
                 return (
-                    <span 
-                        key={p.id} 
-                        className={`
+                  <span
+                    key={p.id}
+                    className={`
                             inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border shadow-sm transition-all
-                            ${isDuplicate 
-                                ? 'bg-orange-50 border-orange-200 text-orange-700' 
-                                : 'bg-white border-slate-200 text-slate-700'}
+                            ${isDuplicate
+                        ? 'bg-orange-50 border-orange-200 text-orange-700'
+                        : 'bg-white border-slate-200 text-slate-700'}
                         `}
-                    >
+                  >
                     {isDuplicate && <AlertCircle className="w-3 h-3" />}
                     {p.name}
-                    </span>
+                  </span>
                 );
               })}
             </div>
@@ -227,12 +252,12 @@ const InputSection: React.FC<InputSectionProps> = ({ participants, setParticipan
 
       {participants.length > 0 && (
         <div className="flex justify-center">
-           <button
+          <button
             onClick={onNext}
             className="py-3 px-8 bg-slate-900 text-white rounded-full font-semibold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
-           >
-             開始使用功能
-           </button>
+          >
+            開始使用功能
+          </button>
         </div>
       )}
     </div>
